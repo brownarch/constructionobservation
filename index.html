@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction Observation App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+            overflow-x: hidden;
+        }
+        input, select, textarea { 
+            font-size: 16px !important; 
+            max-width: 100%;
+        }
+        #root { 
+            width: 100%; 
+            overflow-x: hidden; 
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+const Camera = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>);
+const FileText = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>);
+const Plus = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>);
+const Trash2 = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>);
+const Download = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>);
+const Upload = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>);
+const CheckCircle = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>);
+const FileUp = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>);
+const AlertCircle = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>);
+const Mic = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>);
+
+
+/**
+ * Construction Observation App for Architects
+ * 
+ * TO USE THIS APP ON YOUR PHONE IN THE FIELD:
+ * 
+ * Option 1: Claude.ai Artifacts (Easiest)
+ * ----------------------------------------
+ * 1. Open Claude.ai on your phone's browser
+ * 2. Upload this .tsx file or paste its contents in a message
+ * 3. Ask: "Run this Construction Observation App"
+ * 4. Claude will create an interactive artifact you can use
+ * 5. The app works offline after loading (photos/data stay in your browser)
+ * 
+ * Option 2: Deploy as Web App (Most Professional)
+ * ------------------------------------------------
+ * See instructions at bottom of this file for deploying to:
+ * - Netlify (free, easiest)
+ * - Vercel (free, very easy)
+ * - Your own web server
+ * 
+ * Mobile Features:
+ * - Camera button directly captures photos from your phone
+ * - Touch-friendly interface optimized for tablets and phones
+ * - All data stored locally in your browser
+ * - Download reports as text files to send to clients
+ */
+
+function ConstructionObservationApp() {
+  // Load saved data from localStorage on initial render
+  const loadSavedData = () => {
+    try {
+      const saved = localStorage.getItem('constructionObservationData');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error('Error loading saved data:', error);
+    }
+    return null;
+  };
+
+  const savedData = loadSavedData();
+
+  const [project, setProject] = useState(savedData?.project || {
+    name: '',
+    payAppDate: new Date().toISOString().split('T')[0],
+    periodStart: '',
+    periodEnd: '',
+    observationDate: new Date().toISOString().split('T')[0]
+  });
+  const [items, setItems] = useState(savedData?.items || []);
+  const [photos, setPhotos] = useState(savedData?.photos || {});
+  const [notes, setNotes] = useState(savedData?.notes || {});
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+  const [extractionInstructions, setExtractionInstructions] = useState('');
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const pdfInputRef = useRef(null);
+
+  // Auto-save to localStorage whenever data changes
+  useEffect(() => {
+    try {
+      const dataToSave = {
+        project,
+        items,
+        photos,
+        notes,
+        lastSaved: new Date().toISOString()
+      };
+      localStorage.setItem('constructionObservationData', JSON.stringify(dataToSave));
+    } catch (error) {
+      console.error('Error saving data:', error);
+    }
+  }, [project, items, photos, notes]);
+
+  // Clear all saved data
+  const clearAllData = () => {
+    if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+      localStorage.removeItem('constructionObservationData');
+      setProject({
+        name: '',
+        payAppDate: new Date().toISOString().split('T')[0],
+        periodStart: '',
+        periodEnd: '',
+        observationDate: new Date().toISOString().split('T')[0]
+      });
+      setItems([]);
+      setPhotos({});
+      setNotes({});
+      alert('All data cleared!');
+    }
+  };
+
+  // Export project to file
+  const exportProject = () => {
+    const exportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      project,
+      items,
+      photos,
+      notes
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileName = `${project.name.replace(/\s+/g, '_') || 'Construction_Project'}_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert(`Project exported! Save this file to Google Drive or your phone. You can import it later to continue working.`);
+  };
+
+  // Import project from file
+  const importProject = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importData = JSON.parse(e.target.result);
+        
+        // Validate the data
+        if (!importData.project || !importData.items) {
+          throw new Error('Invalid project file format');
+        }
+        
+        // Confirm before overwriting
+        if (items.length > 0 || project.name) {
+          if (!confirm('This will replace your current project. Continue?')) {
+            return;
+          }
+        }
+        
+        // Load the data
+        setProject(importData.project);
+        setItems(importData.items || []);
+        setPhotos(importData.photos || {});
+        setNotes(importData.notes || {});
+        
+        alert(`Project "${importData.project.name}" loaded successfully!`);
+      } catch (error) {
+        alert('Error loading project file. Please make sure it\'s a valid project export.');
+        console.error('Import error:', error);
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset the input so the same file can be loaded again
+    event.target.value = '';
+  };
+
+  const extractTextFromPDF = async (file) => {
+    setUploadingPdf(true);
+    setPdfError('');
+    
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      let binary = '';
+      const len = uint8Array.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(uint8Array[i]);
+      }
+      const base64 = btoa(binary);
+
+      const response = await fetch('/api/extract-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Data: base64 })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Function failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.content && data.content.length > 0) {
+        let textContent = '';
+        for (const block of data.content) {
+          if (block.type === 'text') textContent += block.text;
+        }
+
+        textContent = textContent.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+        const parsed = JSON.parse(textContent);
+
+        if (parsed.projectInfo) {
+          setProject(prev => ({
+            ...prev,
+            name: parsed.projectInfo.name || prev.name,
+            payAppDate: parsed.projectInfo.payAppDate || prev.payAppDate,
+            periodStart: parsed.projectInfo.periodStart || prev.periodStart,
+            periodEnd: parsed.projectInfo.periodEnd || prev.periodEnd
+          }));
+        }
+
+        if (parsed.lineItems && Array.isArray(parsed.lineItems)) {
+          const allItems = parsed.lineItems.map((item, idx) => {
+            const description = (item.description || '').toLowerCase();
+            const isAdministrative = description.includes('oh & fee') || description.includes('overhead') || 
+              description.includes('profit') || description.includes('general conditions') || description.includes('fee') || 
+              description.includes('bond') || description.includes('insurance') || description.includes('permit') || 
+              description.includes('mobilization');
+
+            return {
+              id: Date.now() + idx,
+              budgetCode: item.budgetCode || '',
+              description: item.description || '',
+              scheduledValue: item.scheduledValue || '0',
+              workCompleted: item.workCompleted || '0',
+              totalCompletedToDate: item.totalCompletedToDate || '0',
+              balanceToFinish: item.balanceToFinish || '0',
+              percentComplete: item.percentComplete || '0',
+              classification: isAdministrative ? 'administrative' : 'observable',
+              verified: false
+            };
+          });
+
+          const cleanValue = (val) => parseFloat((val || '').toString().replace(/[$,]/g, '').trim());
+          const itemsWithWork = allItems.filter(item => {
+            const workAmount = cleanValue(item.workCompleted);
+            return !isNaN(workAmount) && workAmount > 0;
+          });
+
+          setItems(itemsWithWork);
+          setUploadingPdf(false);
+          setExtractionInstructions(
+            `Successfully extracted ${itemsWithWork.length} line items! ` +
+            `(${allItems.length - itemsWithWork.length} items with $0 excluded)`
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Extraction error:', err);
+      setPdfError('Extraction error: ' + err.message);
+      setUploadingPdf(false);
+    }
+  };
+
+  const handlePdfUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type === 'application/pdf') {
+      extractTextFromPDF(file);
+    } else {
+      setPdfError('Please upload a valid PDF file');
+    }
+  };
+
+  const addItem = () => {
+    const newItem = {
+      id: Date.now(),
+      budgetCode: '',
+      description: '',
+      scheduledValue: '',
+      workCompleted: '',
+      totalCompletedToDate: '',
+      balanceToFinish: '',
+      percentComplete: '',
+      itemType: 'observable',
+      completed: false
+    };
+    setItems([...items, newItem]);
+  };
+
+  const parseBulkText = () => {
+    const lines = bulkText.split('\n').filter(line => line.trim());
+    const newItems = lines.map((line, idx) => {
+      const parts = line.split('|').map(p => p.trim());
+      
+      // Auto-detect administrative items
+      const description = (parts[1] || '').toLowerCase();
+      const isAdministrative = 
+        description.includes('oh & fee') ||
+        description.includes('overhead') ||
+        description.includes('profit') ||
+        description.includes('general conditions') ||
+        description.includes('bond') ||
+        description.includes('insurance') ||
+        description.includes('permit') ||
+        description.includes('fee') ||
+        description.includes('supervision') ||
+        description.includes('mobilization');
+      
+      return {
+        id: Date.now() + idx,
+        budgetCode: parts[0] || '',
+        description: parts[1] || '',
+        scheduledValue: parts[2] || '',
+        workCompleted: parts[3] || '',
+        totalCompletedToDate: parts[4] || '',
+        balanceToFinish: parts[5] || '',
+        percentComplete: parts[6] || '',
+        itemType: isAdministrative ? 'administrative' : 'observable',
+        completed: false
+      };
+    });
+    setItems([...items, ...newItems]);
+    setShowBulkAdd(false);
+    setBulkText('');
+  };
+
+  const updateItem = (id, field, value) => {
+    setItems(items.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ));
+  };
+
+  const deleteItem = (id) => {
+    setItems(items.filter(item => item.id !== id));
+  };
+
+  const handlePhotoCapture = (e, itemId) => {
+    const files = Array.from(e.target.files);
+    const newPhotos = files.map(file => ({
+      url: URL.createObjectURL(file),
+      date: new Date().toLocaleString()
+    }));
+    
+    setPhotos(prev => ({
+      ...prev,
+      [itemId]: [...(prev[itemId] || []), ...newPhotos]
+    }));
+  };
+
+  const deletePhoto = (itemId, photoIndex) => {
+    setPhotos(prev => ({
+      ...prev,
+      [itemId]: prev[itemId].filter((_, idx) => idx !== photoIndex)
+    }));
+  };
+
+  const formatCurrency = (value) => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return '$0.00';
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const calculateTotals = () => {
+    const totalScheduled = items.reduce((sum, item) => 
+      sum + (parseFloat(item.scheduledValue) || 0), 0
+    );
+    const totalCompleted = items.reduce((sum, item) => 
+      sum + (parseFloat(item.workCompleted) || 0), 0
+    );
+    const totalCompletedToDate = items.reduce((sum, item) => 
+      sum + (parseFloat(item.totalCompletedToDate) || 0), 0
+    );
+    const totalBalance = items.reduce((sum, item) => 
+      sum + (parseFloat(item.balanceToFinish) || 0), 0
+    );
+    
+    // FIX #1: Calculate observable work from CHECKED items only
+    const observableWork = items
+      .filter(item => item.completed === true)
+      .reduce((sum, item) => sum + (parseFloat(item.workCompleted) || 0), 0);
+    
+    const verifiedCount = items.filter(item => item.completed).length;
+    const pendingCount = items.filter(item => !item.completed).length;
+    
+    const overallPercent = totalScheduled > 0 
+      ? ((totalCompletedToDate / totalScheduled) * 100).toFixed(2)
+      : 0;
+    
+    return { 
+      totalScheduled, 
+      totalCompleted, 
+      totalCompletedToDate, 
+      totalBalance, 
+      overallPercent,
+      observableWork,
+      verifiedCount,
+      pendingCount
+    };
+  };
+
+  const generateReport = () => {
+    const { totalScheduled, totalCompleted, totalCompletedToDate, totalBalance, overallPercent, observableWork, verifiedCount, pendingCount } = calculateTotals();
+    
+    // FIX #2: Only include VERIFIED items in the report
+    const verifiedItems = items.filter(i => i.completed === true);
+    
+    if (verifiedItems.length === 0) {
+      alert('No items have been verified yet. Please check the "Work Verified & Complete" box for items you want to include in the report.');
+      return;
+    }
+    
+    const observableItems = verifiedItems.filter(i => i.itemType === 'observable');
+    const administrativeItems = verifiedItems.filter(i => i.itemType === 'administrative');
+    
+    // FIX #3: Generate PDF instead of text file
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    let yPos = margin;
+
+    const checkPageBreak = (neededSpace) => {
+      if (yPos + neededSpace > pageHeight - margin) {
+        doc.addPage();
+        yPos = margin;
+        return true;
+      }
+      return false;
+    };
+
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(37, 99, 235);
+    doc.text('Construction Observation Report', margin, yPos);
+    yPos += 10;
+    
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
+    yPos += 12;
+
+    // Project Info Box
+    doc.setFillColor(243, 244, 246);
+    doc.rect(margin, yPos, pageWidth - 2 * margin, 45, 'F');
+    
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    yPos += 8;
+    doc.text(`Project: ${project.name || 'Not specified'}`, margin + 5, yPos);
+    yPos += 7;
+    doc.text(`Pay Application Date: ${project.payAppDate}`, margin + 5, yPos);
+    yPos += 7;
+    doc.text(`Period: ${project.periodStart || 'N/A'} to ${project.periodEnd || 'N/A'}`, margin + 5, yPos);
+    yPos += 7;
+    doc.text(`Observation Date: ${project.observationDate}`, margin + 5, yPos);
+    yPos += 15;
+
+    // Financial Summary
+    checkPageBreak(50);
+    doc.setFillColor(219, 234, 254);
+    doc.rect(margin, yPos, pageWidth - 2 * margin, 50, 'F');
+    
+    doc.setFontSize(12);
+    doc.setTextColor(30, 64, 175);
+    yPos += 8;
+    doc.text('Financial Summary', margin + 5, yPos);
+    
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    yPos += 7;
+    doc.text(`Total Contract Value: ${formatCurrency(totalScheduled)}`, margin + 5, yPos);
+    yPos += 6;
+    doc.text(`Work Completed This Period: ${formatCurrency(totalCompleted)}`, margin + 5, yPos);
+    yPos += 6;
+    doc.text(`Total Completed to Date: ${formatCurrency(totalCompletedToDate)}`, margin + 5, yPos);
+    yPos += 6;
+    doc.text(`Balance to Finish: ${formatCurrency(totalBalance)}`, margin + 5, yPos);
+    yPos += 6;
+    doc.text(`Overall Completion: ${overallPercent}%`, margin + 5, yPos);
+    yPos += 6;
+    doc.setTextColor(22, 163, 74);
+    doc.text(`Observable Work (Verified): ${formatCurrency(observableWork)}`, margin + 5, yPos);
+    yPos += 15;
+
+    // Verification Summary
+    checkPageBreak(30);
+    doc.setFillColor(254, 243, 199);
+    doc.rect(margin, yPos, pageWidth - 2 * margin, 25, 'F');
+    
+    doc.setFontSize(11);
+    doc.setTextColor(120, 53, 15);
+    yPos += 7;
+    doc.text('Verification Summary', margin + 5, yPos);
+    
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    yPos += 6;
+    doc.text(`Items Verified: ${verifiedCount} | Items Pending: ${pendingCount} | Total Items: ${items.length}`, margin + 5, yPos);
+    yPos += 6;
+    doc.setTextColor(185, 28, 28);
+    doc.text(`NOTE: This report includes ONLY verified items (${verifiedCount} of ${items.length} total)`, margin + 5, yPos);
+    yPos += 15;
+
+    // Section A: Observable Work Items
+    if (observableItems.length > 0) {
+      checkPageBreak(20);
+      doc.setFillColor(239, 246, 255);
+      doc.rect(margin, yPos, pageWidth - 2 * margin, 15, 'F');
+      
+      doc.setFontSize(12);
+      doc.setTextColor(30, 64, 175);
+      yPos += 10;
+      doc.text('SECTION A: OBSERVABLE WORK - FIELD VERIFIED', margin + 5, yPos);
+      yPos += 10;
+      
+      doc.setFontSize(8);
+      doc.setTextColor(75, 85, 99);
+      const sectionNote = doc.splitTextToSize('The following items represent physical construction work that was observed and verified in the field:', pageWidth - 2 * margin - 10);
+      doc.text(sectionNote, margin + 5, yPos);
+      yPos += 12;
+
+      observableItems.forEach((item, idx) => {
+        checkPageBreak(55);
+        
+        doc.setFillColor(249, 250, 251);
+        doc.rect(margin, yPos, pageWidth - 2 * margin, 50, 'F');
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont(undefined, 'bold');
+        yPos += 7;
+        const itemTitle = `${idx + 1}. ${item.budgetCode ? `[${item.budgetCode}] ` : ''}${item.description || 'Untitled Item'}`;
+        doc.text(itemTitle.substring(0, 80), margin + 5, yPos);
+        doc.setFont(undefined, 'normal');
+        
+        doc.setFontSize(8);
+        yPos += 6;
+        doc.text(`Scheduled Value: ${formatCurrency(item.scheduledValue)}`, margin + 5, yPos);
+        doc.text(`Work This Period: ${formatCurrency(item.workCompleted)}`, pageWidth / 2, yPos);
+        
+        yPos += 5;
+        doc.text(`Total to Date: ${formatCurrency(item.totalCompletedToDate)}`, margin + 5, yPos);
+        doc.text(`Balance: ${formatCurrency(item.balanceToFinish)}`, pageWidth / 2, yPos);
+        
+        yPos += 5;
+        const percent = parseFloat(item.percentComplete) || 0;
+        doc.text(`Percent Complete: ${percent}%`, margin + 5, yPos);
+        doc.text(`Photos: ${photos[item.id]?.length || 0}`, pageWidth / 2, yPos);
+        
+        yPos += 5;
+        doc.setTextColor(22, 163, 74);
+        doc.text('✓ FIELD VERIFIED', margin + 5, yPos);
+        
+        if (notes[item.id]) {
+          doc.setTextColor(0, 0, 0);
+          yPos += 5;
+          const noteLines = doc.splitTextToSize(`Notes: ${notes[item.id]}`, pageWidth - 2 * margin - 10);
+          doc.text(noteLines.slice(0, 2), margin + 5, yPos);
+          yPos += 5;
+        }
+        
+        yPos += 12;
+
+        // Add photos if available
+        if (photos[item.id] && photos[item.id].length > 0) {
+          checkPageBreak(65);
+          doc.setFontSize(8);
+          doc.setTextColor(75, 85, 99);
+          doc.text('Verification Photos:', margin + 5, yPos);
+          yPos += 5;
+          
+          const photosToShow = photos[item.id].slice(0, 4);
+          let xPos = margin + 5;
+          
+          for (let i = 0; i < photosToShow.length; i++) {
+            const photo = photosToShow[i];
+            try {
+              const imgWidth = 35;
+              const imgHeight = 26;
+              
+              if (i === 2) {
+                xPos = margin + 5;
+                yPos += imgHeight + 3;
+                checkPageBreak(imgHeight + 10);
+              }
+              
+              doc.addImage(photo.url, 'JPEG', xPos, yPos, imgWidth, imgHeight);
+              
+              doc.setFontSize(6);
+              doc.text(photo.date, xPos, yPos + imgHeight + 2);
+              
+              xPos += imgWidth + 5;
+            } catch (err) {
+              console.error('Error adding photo:', err);
+            }
+          }
+          
+          if (photosToShow.length > 2) {
+            yPos += 35;
+          } else {
+            yPos += 30;
+          }
+        }
+      });
+    }
+
+    // Section B: Administrative Items
+    if (administrativeItems.length > 0) {
+      checkPageBreak(20);
+      doc.setFillColor(254, 249, 195);
+      doc.rect(margin, yPos, pageWidth - 2 * margin, 15, 'F');
+      
+      doc.setFontSize(12);
+      doc.setTextColor(120, 53, 15);
+      yPos += 10;
+      doc.text('SECTION B: ADMINISTRATIVE/FINANCIAL ITEMS', margin + 5, yPos);
+      yPos += 10;
+      
+      doc.setFontSize(8);
+      doc.setTextColor(75, 85, 99);
+      const adminNote = doc.splitTextToSize('Administrative items are not subject to field observation. These amounts are acknowledged as stated:', pageWidth - 2 * margin - 10);
+      doc.text(adminNote, margin + 5, yPos);
+      yPos += 12;
+
+      administrativeItems.forEach((item, idx) => {
+        checkPageBreak(40);
+        
+        doc.setFillColor(249, 250, 251);
+        doc.rect(margin, yPos, pageWidth - 2 * margin, 35, 'F');
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont(undefined, 'bold');
+        yPos += 7;
+        const itemTitle = `${idx + 1}. ${item.budgetCode ? `[${item.budgetCode}] ` : ''}${item.description || 'Untitled Item'}`;
+        doc.text(itemTitle.substring(0, 80), margin + 5, yPos);
+        doc.setFont(undefined, 'normal');
+        
+        doc.setFontSize(8);
+        yPos += 6;
+        doc.text(`Scheduled Value: ${formatCurrency(item.scheduledValue)}`, margin + 5, yPos);
+        doc.text(`Work This Period: ${formatCurrency(item.workCompleted)}`, pageWidth / 2, yPos);
+        
+        yPos += 5;
+        const percent = parseFloat(item.percentComplete) || 0;
+        doc.text(`Percent Complete: ${percent}%`, margin + 5, yPos);
+        
+        yPos += 5;
+        doc.setTextColor(59, 130, 246);
+        doc.text('✓ ACKNOWLEDGED', margin + 5, yPos);
+        
+        yPos += 12;
+      });
+    }
+
+    // Architect's Certification
+    checkPageBreak(80);
+    doc.setFillColor(243, 244, 246);
+    doc.rect(margin, yPos, pageWidth - 2 * margin, 75, 'F');
+    
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'bold');
+    yPos += 8;
+    doc.text("ARCHITECT'S CERTIFICATION", margin + 5, yPos);
+    doc.setFont(undefined, 'normal');
+    
+    doc.setFontSize(8);
+    yPos += 7;
+    
+    const certText = [
+      'SCOPE OF OBSERVATION:',
+      `This report documents observations conducted on ${project.observationDate}. The architect's observations are limited to readily visible conditions.`,
+      '',
+      'OBSERVABLE WORK: I have visited the site and observed the construction work identified as "Observable Work" items.',
+      '',
+      'ADMINISTRATIVE ITEMS: Administrative items are not subject to field observation and are acknowledged as stated.',
+      '',
+      'LIMITATIONS: This observation does not constitute a warranty. The architect has not verified quantities through detailed testing.'
+    ];
+    
+    certText.forEach(line => {
+      if (line === '') {
+        yPos += 3;
+      } else {
+        const lines = doc.splitTextToSize(line, pageWidth - 2 * margin - 10);
+        doc.text(lines, margin + 5, yPos);
+        yPos += lines.length * 4;
+      }
+    });
+    
+    yPos += 10;
+    doc.text('_____________________________________', margin + 5, yPos);
+    yPos += 5;
+    doc.text("Architect's Signature", margin + 5, yPos);
+    yPos += 7;
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, margin + 5, yPos);
+
+    // Page numbers
+    const totalPages = doc.internal.pages.length - 1;
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text(
+        `Page ${i} of ${totalPages}`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: 'center' }
+      );
+    }
+
+    // Save PDF
+    const fileName = `Construction_Report_${project.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+  };
+
+  const { totalScheduled, totalCompleted, totalCompletedToDate, totalBalance, overallPercent, observableWork, verifiedCount, pendingCount } = calculateTotals();
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-xl p-4 sm:p-6 lg:p-8 mb-6 overflow-hidden">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <FileText className="w-8 h-8 lg:w-10 lg:h-10 text-blue-600" />
+              <div>
+                <h1 className="text-xl lg:text-3xl font-bold text-gray-800">Construction Observation Report</h1>
+                <p className="text-xs text-green-600 mt-1">✓ Auto-saving to browser</p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="file"
+                accept=".json"
+                onChange={importProject}
+                style={{ display: 'none' }}
+                id="importProjectFile"
+              />
+              <label
+                htmlFor="importProjectFile"
+                className="px-4 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium cursor-pointer text-center whitespace-nowrap"
+              >
+                Import Project
+              </label>
+              <button
+                onClick={exportProject}
+                className="px-4 py-2 bg-green-50 text-green-600 border border-green-200 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium whitespace-nowrap"
+              >
+                Export Project
+              </button>
+              <button
+                onClick={clearAllData}
+                className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium whitespace-nowrap"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+              <input
+                type="text"
+                value={project.name}
+                onChange={(e) => setProject({...project, name: e.target.value})}
+                placeholder="Enter project name"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pay Application Date</label>
+              <input
+                type="date"
+                value={project.payAppDate}
+                onChange={(e) => setProject({...project, payAppDate: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Period Start</label>
+              <input
+                type="date"
+                value={project.periodStart}
+                onChange={(e) => setProject({...project, periodStart: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Period End</label>
+              <input
+                type="date"
+                value={project.periodEnd}
+                onChange={(e) => setProject({...project, periodEnd: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Observation Date</label>
+              <input
+                type="date"
+                value={project.observationDate}
+                onChange={(e) => setProject({...project, observationDate: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* PDF Upload Section */}
+          <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+            <div className="flex items-center gap-3 mb-3">
+              <FileUp className="w-6 h-6 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-800">Import from AIA Pay Application (G702/G703)</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">
+              Upload an AIA pay application PDF to automatically extract line items from pages 2-4. 
+              The app will read the Schedule of Values table including Budget Code, Description, Scheduled Value (Column C), Work Completed This Period (Column E), Total Completed to Date (Column G), Balance to Finish (Column H), and % Complete.
+              <strong> Only line items with work completed this period will be included for observation.</strong>
+            </p>
+            <div className="mt-2 p-2 bg-blue-50 border-l-4 border-blue-400 rounded">
+              <p className="text-xs text-blue-800">
+                <strong>Smart Classification:</strong> The app automatically detects administrative items (OH&P, General Conditions, Bonds, Insurance, Permits) 
+                and marks them as "Not Observable." You can adjust classifications manually after import.
+              </p>
+            </div>
+            <div className="flex gap-3 items-center">
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf"
+                onChange={handlePdfUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={uploadingPdf}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                <Upload className="w-5 h-5" />
+                {uploadingPdf ? 'Extracting Data...' : 'Upload Pay Application PDF'}
+              </button>
+              {uploadingPdf && (
+                <div className="flex items-center gap-2 text-blue-600">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <span className="text-sm font-medium">Processing PDF...</span>
+                </div>
+              )}
+            </div>
+            {pdfError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-red-800 font-medium">{pdfError}</p>
+                    {extractionInstructions && (
+                      <pre className="mt-2 text-xs text-red-700 whitespace-pre-wrap">{extractionInstructions}</pre>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {!pdfError && extractionInstructions && (
+              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-green-800 font-medium">{extractionInstructions}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Summary Cards */}
+          {items.length > 0 && (
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-4 text-white">
+                <p className="text-xs opacity-90 mb-1">Total Contract Value</p>
+                <p className="text-xl font-bold">{formatCurrency(totalScheduled)}</p>
+              </div>
+              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-4 text-white">
+                <p className="text-xs opacity-90 mb-1">Work This Period</p>
+                <p className="text-xl font-bold">{formatCurrency(totalCompleted)}</p>
+              </div>
+              <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg p-4 text-white">
+                <p className="text-xs opacity-90 mb-1">Total Completed to Date</p>
+                <p className="text-xl font-bold">{formatCurrency(totalCompletedToDate)}</p>
+              </div>
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg p-4 text-white">
+                <p className="text-xs opacity-90 mb-1">Observable Work</p>
+                <p className="text-xl font-bold">{formatCurrency(observableWork)}</p>
+                <p className="text-xs opacity-75 mt-1">{verifiedCount} verified</p>
+              </div>
+              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg p-4 text-white">
+                <p className="text-xs opacity-90 mb-1">Balance to Finish</p>
+                <p className="text-xl font-bold">{formatCurrency(totalBalance)}</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-4 text-white">
+                <p className="text-xs opacity-90 mb-1">Overall Completion</p>
+                <p className="text-xl font-bold">{overallPercent}%</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Item Classification Breakdown */}
+          {items.length > 0 && (
+            <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Item Classification Summary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                  <CheckCircle className="w-8 h-8 text-blue-600" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Observable Work Items</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {items.filter(i => i.itemType === 'observable').length}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {items.filter(i => i.itemType === 'observable' && i.completed).length} verified
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
+                  <FileText className="w-8 h-8 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Administrative Items</p>
+                    <p className="text-2xl font-bold text-amber-600">
+                      {items.filter(i => i.itemType === 'administrative').length}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {items.filter(i => i.itemType === 'administrative' && i.completed).length} acknowledged
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Add Items Section */}
+        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-6">
+          <div className="flex gap-3 mb-4">
+            <button
+              onClick={addItem}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Add Single Item
+            </button>
+            <button
+              onClick={() => setShowBulkAdd(!showBulkAdd)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Upload className="w-5 h-5" />
+              Quick Add Multiple Items
+            </button>
+          </div>
+
+          {showBulkAdd && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <h3 className="font-semibold text-gray-800 mb-2">Quick Add Multiple Items</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Paste line items (one per line). Format: <code className="bg-white px-2 py-1 rounded text-xs">Budget Code | Description | Scheduled | Work This Period | Total To Date | Balance | %</code>
+                <br />
+                Example: <code className="bg-white px-2 py-1 rounded text-xs">03 - Concrete | Concrete Foundation | 50000.00 | 25000.00 | 25000.00 | 25000.00 | 50</code>
+              </p>
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                placeholder="01 - General | General Conditions | 20000.00 | 20000.00 | 20000.00 | 0.00 | 100&#10;03 - Concrete | Site Work | 50000.00 | 5000.00 | 5000.00 | 45000.00 | 10"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3 font-mono text-sm"
+                rows="10"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={parseBulkText}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Add Items
+                </button>
+                <button
+                  onClick={() => {setShowBulkAdd(false); setBulkText('');}}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Line Items */}
+        {items.map((item) => (
+          <div key={item.id} className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1 min-w-0">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Budget Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., 03 - Concrete"
+                      value={item.budgetCode}
+                      onChange={(e) => updateItem(item.id, 'budgetCode', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-semibold"
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Description of Work</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Concrete Foundation Work"
+                      value={item.description}
+                      onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+                
+                {/* Item Type Classification */}
+                <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-2">Item Classification</label>
+                      <select
+                        value={item.itemType || 'observable'}
+                        onChange={(e) => updateItem(item.id, 'itemType', e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      >
+                        <option value="observable">Observable Work - Subject to Field Verification</option>
+                        <option value="administrative">Administrative/Financial - Not Observable in Field</option>
+                      </select>
+                    </div>
+                    <div className="ml-4">
+                      {item.itemType === 'administrative' ? (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                          <FileText className="w-3 h-3 mr-1" />
+                          Administrative
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Observable
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Scheduled Value (Total Contract)</label>
+                    <input
+                      type="text"
+                      placeholder="$0.00"
+                      value={item.scheduledValue}
+                      onChange={(e) => updateItem(item.id, 'scheduledValue', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Work Completed (This Period)</label>
+                    <input
+                      type="text"
+                      placeholder="$0.00"
+                      value={item.workCompleted}
+                      onChange={(e) => updateItem(item.id, 'workCompleted', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Total Completed to Date</label>
+                    <input
+                      type="text"
+                      placeholder="$0.00"
+                      value={item.totalCompletedToDate}
+                      onChange={(e) => updateItem(item.id, 'totalCompletedToDate', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Balance to Finish</label>
+                    <input
+                      type="text"
+                      placeholder="$0.00"
+                      value={item.balanceToFinish}
+                      onChange={(e) => updateItem(item.id, 'balanceToFinish', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">% Complete</label>
+                    <input
+                      type="text"
+                      placeholder="0%"
+                      value={item.percentComplete}
+                      onChange={(e) => updateItem(item.id, 'percentComplete', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => deleteItem(item.id)}
+                className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Conditional Verification Section */}
+            <div className={`flex items-center gap-2 mb-4 p-3 rounded-lg ${
+              item.itemType === 'administrative' 
+                ? 'bg-amber-50 border border-amber-200' 
+                : 'bg-gray-50'
+            }`}>
+              <input
+                type="checkbox"
+                id={`complete-${item.id}`}
+                checked={item.completed}
+                onChange={(e) => updateItem(item.id, 'completed', e.target.checked)}
+                className={`w-5 h-5 rounded focus:ring-2 ${
+                  item.itemType === 'administrative'
+                    ? 'text-amber-600 focus:ring-amber-500'
+                    : 'text-green-600 focus:ring-green-500'
+                }`}
+              />
+              <label htmlFor={`complete-${item.id}`} className="flex items-center gap-2 cursor-pointer flex-1">
+                {item.itemType === 'administrative' ? (
+                  <>
+                    <FileText className={`w-5 h-5 ${item.completed ? 'text-amber-600' : 'text-gray-400'}`} />
+                    <div>
+                      <span className="text-gray-700 font-medium block">Acknowledged - Not Subject to Field Observation</span>
+                      <span className="text-xs text-gray-500">Amount accepted as stated in contractor's pay application</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className={`w-5 h-5 ${item.completed ? 'text-green-600' : 'text-gray-400'}`} />
+                    <div>
+                      <span className="text-gray-700 font-medium block">Work Verified & Complete</span>
+                      <span className="text-xs text-gray-500">Physically observed and verified in the field</span>
+                    </div>
+                  </>
+                )}
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Camera className="w-4 h-4 inline mr-2" />
+                  Verification Photos
+                </label>
+                <div className="flex gap-2 mb-3">
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      capture="environment"
+                      onChange={(e) => handlePhotoCapture(e, item.id)}
+                      className="hidden"
+                    />
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold">
+                      <Camera className="w-4 h-4" />
+                      Take Photo
+                    </div>
+                  </label>
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => handlePhotoCapture(e, item.id)}
+                      className="hidden"
+                    />
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-semibold">
+                      <Upload className="w-4 h-4" />
+                      Select Photos
+                    </div>
+                  </label>
+                </div>
+                {photos[item.id] && photos[item.id].length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {photos[item.id].map((photo, idx) => (
+                      <div key={idx} className="relative group">
+                        <img 
+                          src={photo.url} 
+                          alt={`Photo ${idx + 1}`}
+                          className="w-full h-32 object-cover rounded-lg border border-gray-300"
+                        />
+                        <button
+                          onClick={() => deletePhoto(item.id, idx)}
+                          className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <p className="text-xs text-gray-500 mt-1">{photo.date}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Mic className="w-4 h-4 inline mr-2" />
+                  Observation Notes
+                </label>
+                <textarea
+                  placeholder="Add observations, concerns, or voice note transcriptions..."
+                  value={notes[item.id] || ''}
+                  onChange={(e) => setNotes({...notes, [item.id]: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows="4"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {items.length > 0 && (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <button
+              onClick={generateReport}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+            >
+              <Download className="w-5 h-5" />
+              Generate Report for Bank
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<ConstructionObservationApp />);
+    </script>
+</body>
+</html>
