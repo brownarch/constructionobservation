@@ -3,5 +3,6 @@
     "api/extract-pdf.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "maxRequestBodySize": "20mb"
 }
