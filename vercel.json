@@ -4,5 +4,5 @@
       "maxDuration": 60
     }
   },
-  "maxRequestBodySize": "20mb"
+  "maxRequestBodySize": "4.5mb"
 }
