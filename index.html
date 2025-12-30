@@ -154,8 +154,18 @@
                         }
 
                         if (parsed.lineItems && Array.isArray(parsed.lineItems)) {
+                            // Helper function to clean and parse dollar amounts
+                            const cleanValue = (val) => {
+                                const cleaned = (val || '').toString().replace(/[$,]/g, '').trim();
+                                return parseFloat(cleaned) || 0;
+                            };
+
                             const newItems = parsed.lineItems
-                                .filter(item => item.needsVerification !== false)
+                                .filter(item => {
+                                    // Only include items where payment is being requested
+                                    const workThisPeriod = cleanValue(item.workCompletedThisPeriod);
+                                    return item.needsVerification !== false && workThisPeriod > 0;
+                                })
                                 .map((item, idx) => ({
                                     id: Date.now() + idx,
                                     description: item.description || '',
