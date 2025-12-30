@@ -25,6 +25,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No PDF data provided' });
     }
 
+    // Check if API key exists
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('ANTHROPIC_API_KEY environment variable is not set');
+      return res.status(500).json({ 
+        error: 'Server configuration error', 
+        message: 'API key not configured' 
+      });
+    }
+
+    console.log('API Key present:', process.env.ANTHROPIC_API_KEY ? 'Yes' : 'No');
+    console.log('PDF data size:', base64Data.length);
+
     // Call Anthropic API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -91,6 +103,8 @@ Return ONLY valid JSON with no markdown formatting, no explanation, no preamble.
       })
     });
 
+    console.log('Anthropic API response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Anthropic API error:', errorText);
@@ -101,15 +115,18 @@ Return ONLY valid JSON with no markdown formatting, no explanation, no preamble.
     }
 
     const data = await response.json();
+    console.log('Successfully received data from Anthropic');
     
     // Return the response from Anthropic
     return res.status(200).json(data);
 
   } catch (error) {
     console.error('Error in extract-pdf function:', error);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({ 
       error: 'Internal server error', 
-      message: error.message 
+      message: error.message,
+      stack: error.stack
     });
   }
 }
