@@ -109,6 +109,7 @@
             const extractTextFromPDF = async (file) => {
                 setUploadingPdf(true);
                 setPdfError('');
+                console.log('Starting PDF extraction...');
                 
                 try {
                     const arrayBuffer = await file.arrayBuffer();
@@ -120,28 +121,36 @@
                         binary += String.fromCharCode(uint8Array[i]);
                     }
                     const base64 = btoa(binary);
+                    console.log('PDF converted to base64, size:', base64.length);
 
+                    console.log('Calling /api/extract-pdf...');
                     const response = await fetch('/api/extract-pdf', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ base64Data: base64 })
                     });
 
+                    console.log('Response status:', response.status);
                     if (!response.ok) {
-                        throw new Error(`Function failed: ${response.status}`);
+                        const errorText = await response.text();
+                        console.error('API Error:', errorText);
+                        throw new Error(`Function failed: ${response.status} - ${errorText}`);
                     }
 
                     const data = await response.json();
+                    console.log('API Response:', data);
 
                     if (data.content && data.content.length > 0) {
                         let textContent = '';
                         for (const block of data.content) {
                             if (block.type === 'text') textContent += block.text;
                         }
+                        console.log('Extracted text content:', textContent.substring(0, 200) + '...');
 
                         textContent = textContent.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
                         const parsed = JSON.parse(textContent);
+                        console.log('Parsed JSON:', parsed);
 
                         if (parsed.projectInfo) {
                             setProject(prev => ({
@@ -151,9 +160,12 @@
                                 periodStart: parsed.projectInfo.periodStart || prev.periodStart,
                                 periodEnd: parsed.projectInfo.periodEnd || prev.periodEnd
                             }));
+                            console.log('Project info updated');
                         }
 
                         if (parsed.lineItems && Array.isArray(parsed.lineItems)) {
+                            console.log('Total line items from API:', parsed.lineItems.length);
+                            
                             // Helper function to clean and parse dollar amounts
                             const cleanValue = (val) => {
                                 const cleaned = (val || '').toString().replace(/[$,]/g, '').trim();
@@ -164,7 +176,11 @@
                                 .filter(item => {
                                     // Only include items where payment is being requested
                                     const workThisPeriod = cleanValue(item.workCompletedThisPeriod);
-                                    return item.needsVerification !== false && workThisPeriod > 0;
+                                    const include = item.needsVerification !== false && workThisPeriod > 0;
+                                    if (!include) {
+                                        console.log(`Filtering out: ${item.description} (workThisPeriod: ${workThisPeriod})`);
+                                    }
+                                    return include;
                                 })
                                 .map((item, idx) => ({
                                     id: Date.now() + idx,
@@ -175,12 +191,21 @@
                                     completed: false
                                 }));
                             
+                            console.log('Filtered items:', newItems.length);
+                            console.log('Items to add:', newItems);
                             setItems(newItems);
                             setPdfError('');
+                        } else {
+                            console.error('No lineItems in parsed data');
+                            setPdfError('No line items found in PDF');
                         }
+                    } else {
+                        console.error('No content in API response');
+                        setPdfError('No content returned from API');
                     }
 
                     setUploadingPdf(false);
+                    console.log('PDF extraction complete');
                 } catch (err) {
                     console.error('Extraction error:', err);
                     setPdfError('Extraction error: ' + err.message);
