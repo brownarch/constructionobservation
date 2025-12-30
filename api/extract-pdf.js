@@ -1,11 +1,17 @@
 export default async function handler(req, res) {
-  // Enable CORS
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
+  // Handle preflight request
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
 
   if (req.method !== 'POST') {
@@ -14,91 +20,96 @@ export default async function handler(req, res) {
 
   try {
     const { base64Data } = req.body;
-    
+
     if (!base64Data) {
       return res.status(400).json({ error: 'No PDF data provided' });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ 
-        error: 'API key not configured. Add ANTHROPIC_API_KEY in Vercel environment variables.' 
-      });
-    }
-
+    // Call Anthropic API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'x-api-key': apiKey
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000,
+        max_tokens: 4096,
         messages: [{
           role: 'user',
           content: [
-            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } },
-            { type: 'text', text: `You are analyzing an AIA G702/G703 pay application PDF.
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: base64Data
+              }
+            },
+            {
+              type: 'text',
+              text: `You are analyzing an AIA G703 Continuation Sheet (pay application). Look at pages 2-4 which contain a table with these columns:
 
-PAGE 1 - G702 APPLICATION AND CERTIFICATE FOR PAYMENT:
-Extract project information and summary totals from the numbered lines:
-- PROJECT: field → project name
-- PERIOD: field → period start and end dates (format as YYYY-MM-DD)
-- Line 1: Original Contract Sum
-- Line 3: Contract Sum to date (Line 1 + 2)
-- Line 4: Total completed and stored to date (Column G on detail sheet)
-- Line 8: Current payment due
+Column A: Item Number
+Column B: Description of Work
+Column C: Scheduled Value (total contract amount)
+Column D: Work Completed from Previous Application
+Column E: This Period (WORK COMPLETED THIS BILLING PERIOD - THIS IS THE PAYMENT REQUEST)
+Column F: Materials Presently Stored
+Column G: Total Completed and Stored to Date (D + E + F)
+Column H: % Complete (G/C)
+Column I: Balance to Finish (C - G)
 
-PAGES 2+ - G703 CONTINUATION SHEET:
-This is a table with columns A through I:
-- Column A: Item No.
-- Column B: Budget Code (like "17-200.O", "01-000.O", etc.)
-- Column C: Description of Work
-- Column D: Scheduled Value
-- Column E: Work Completed This Period
-- Column G: Total Completed and Stored to Date (D + E + F)
-- Column H: Balance to Finish (C - G)
-- Column G/C: % complete
+CRITICAL INSTRUCTIONS:
+1. Extract ONLY rows where Column E "This Period" has a dollar value greater than $0
+2. EXCLUDE any row where the description contains: "LABOR", "OH & FEE", "OVERHEAD", "PROFIT", "GENERAL CONDITIONS", "BOND", "INSURANCE", "PERMIT", "FEE", "SUPERVISION", "MOBILIZATION"
+3. For each qualifying row, extract Column B (description), Column E (This Period), and Column G (Total Completed to Date)
 
-Extract ALL line items from the table. Include items with $0.00 values.
-Skip rows that say "TOTALS:" or "GRAND TOTALS:" or "Change Orders" section headers.
-
-Return ONLY this JSON (no markdown, no extra text):
+Return a JSON object with this EXACT structure:
 {
   "projectInfo": {
-    "name": "project name from PAGE 1",
-    "payAppDate": "YYYY-MM-DD from PAGE 1",
-    "periodStart": "YYYY-MM-DD from PERIOD field",
-    "periodEnd": "YYYY-MM-DD from PERIOD field"
+    "name": "project name from top of form",
+    "payAppDate": "application date in YYYY-MM-DD format",
+    "periodStart": "period start date in YYYY-MM-DD format",
+    "periodEnd": "period end date in YYYY-MM-DD format"
   },
-  "g702Totals": {
-    "originalContractSum": "Line 1 value",
-    "contractSumToDate": "Line 3 value",
-    "totalCompletedToDate": "Line 4 value",
-    "currentPaymentDue": "Line 8 value"
-  },
-  "lineItems": [{
-    "budgetCode": "Column B value",
-    "description": "Column C value",
-    "scheduledValue": "Column D value as number",
-    "workCompleted": "Column E value as number",
-    "totalCompletedToDate": "Column G value as number",
-    "balanceToFinish": "Column H value as number",
-    "percentComplete": "% column as number"
-  }]
-}`}
+  "lineItems": [
+    {
+      "description": "exact text from Column B",
+      "needsVerification": true,
+      "workCompletedThisPeriod": "dollar amount from Column E without $ or commas",
+      "valueRequested": "dollar amount from Column G without $ or commas"
+    }
+  ]
+}
+
+Return ONLY valid JSON with no markdown formatting, no explanation, no preamble.`
+            }
           ]
-        }]
+        })
       })
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Anthropic API error:', errorText);
+      return res.status(response.status).json({ 
+        error: 'API request failed', 
+        details: errorText 
+      });
+    }
+
     const data = await response.json();
+    
+    // Return the response from Anthropic
     return res.status(200).json(data);
 
   } catch (error) {
-    console.error('Function error:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Error in extract-pdf function:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      message: error.message 
+    });
   }
 }
