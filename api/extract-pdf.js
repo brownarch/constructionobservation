@@ -99,7 +99,7 @@ Return a JSON object with this EXACT structure:
 Return ONLY valid JSON with no markdown formatting, no explanation, no preamble.`
             }
           ]
-        })
+        }]
       })
     });
 
