@@ -6,6 +6,7 @@
     <title>Construction Field Verification</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -22,7 +23,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useRef } = React;
+        const { useState, useRef, useEffect } = React;
 
         // Lucide React Icons as inline SVG components
         const Camera = ({ className = "w-6 h-6" }) => (
@@ -89,22 +90,140 @@
             </svg>
         );
 
+        const Save = ({ className = "w-6 h-6" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+            </svg>
+        );
+
         function App() {
-            const [project, setProject] = useState({
+            // Load saved data from localStorage
+            const loadSavedData = () => {
+                try {
+                    const saved = localStorage.getItem('constructionVerificationData');
+                    if (saved) {
+                        return JSON.parse(saved);
+                    }
+                } catch (error) {
+                    console.error('Error loading saved data:', error);
+                }
+                return null;
+            };
+
+            const savedData = loadSavedData();
+
+            const [project, setProject] = useState(savedData?.project || {
                 name: '',
                 payAppDate: new Date().toISOString().split('T')[0],
                 periodStart: '',
                 periodEnd: '',
                 observationDate: new Date().toISOString().split('T')[0]
             });
-            const [items, setItems] = useState([]);
-            const [photos, setPhotos] = useState({});
-            const [notes, setNotes] = useState({});
+            const [items, setItems] = useState(savedData?.items || []);
+            const [photos, setPhotos] = useState(savedData?.photos || {});
+            const [notes, setNotes] = useState(savedData?.notes || {});
             const [uploadingPdf, setUploadingPdf] = useState(false);
             const [pdfError, setPdfError] = useState('');
             const [showBulkAdd, setShowBulkAdd] = useState(false);
             const [bulkText, setBulkText] = useState('');
             const pdfInputRef = useRef(null);
+            const importInputRef = useRef(null);
+
+            // Auto-save to localStorage whenever data changes
+            useEffect(() => {
+                try {
+                    const dataToSave = {
+                        project,
+                        items,
+                        photos,
+                        notes,
+                        lastSaved: new Date().toISOString()
+                    };
+                    localStorage.setItem('constructionVerificationData', JSON.stringify(dataToSave));
+                } catch (error) {
+                    console.error('Error saving data:', error);
+                }
+            }, [project, items, photos, notes]);
+
+            // Export project to JSON file
+            const exportProject = () => {
+                const exportData = {
+                    version: '1.0',
+                    exportDate: new Date().toISOString(),
+                    project,
+                    items,
+                    photos,
+                    notes
+                };
+                
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const fileName = `${project.name.replace(/\s+/g, '_') || 'Verification_Project'}_${new Date().toISOString().split('T')[0]}.json`;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                alert('Project exported! Save this file to continue later.');
+            };
+
+            // Import project from JSON file
+            const importProject = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importData = JSON.parse(e.target.result);
+                        
+                        if (!importData.project || !importData.items) {
+                            throw new Error('Invalid project file format');
+                        }
+                        
+                        if (items.length > 0 || project.name) {
+                            if (!confirm('This will replace your current project. Continue?')) {
+                                return;
+                            }
+                        }
+                        
+                        setProject(importData.project);
+                        setItems(importData.items || []);
+                        setPhotos(importData.photos || {});
+                        setNotes(importData.notes || {});
+                        
+                        alert(`Project "${importData.project.name}" loaded successfully!`);
+                    } catch (error) {
+                        alert('Error loading project file. Please make sure it\'s a valid export.');
+                        console.error('Import error:', error);
+                    }
+                };
+                reader.readAsText(file);
+                event.target.value = '';
+            };
+
+            // Clear all data
+            const clearAllData = () => {
+                if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                    localStorage.removeItem('constructionVerificationData');
+                    setProject({
+                        name: '',
+                        payAppDate: new Date().toISOString().split('T')[0],
+                        periodStart: '',
+                        periodEnd: '',
+                        observationDate: new Date().toISOString().split('T')[0]
+                    });
+                    setItems([]);
+                    setPhotos({});
+                    setNotes({});
+                    alert('All data cleared!');
+                }
+            };
 
             const extractTextFromPDF = async (file) => {
                 setUploadingPdf(true);
@@ -166,7 +285,6 @@
                         if (parsed.lineItems && Array.isArray(parsed.lineItems)) {
                             console.log('Total line items from API:', parsed.lineItems.length);
                             
-                            // Helper function to clean and parse dollar amounts
                             const cleanValue = (val) => {
                                 const cleaned = (val || '').toString().replace(/[$,]/g, '').trim();
                                 return parseFloat(cleaned) || 0;
@@ -174,7 +292,6 @@
 
                             const newItems = parsed.lineItems
                                 .filter(item => {
-                                    // Only include items where payment is being requested
                                     const workThisPeriod = cleanValue(item.workCompletedThisPeriod);
                                     const include = item.needsVerification !== false && workThisPeriod > 0;
                                     if (!include) {
@@ -187,7 +304,6 @@
                                     description: item.description || '',
                                     workCompletedThisPeriod: String(item.workCompletedThisPeriod || ''),
                                     valueRequested: String(item.valueRequested || ''),
-                                    needsVerification: true,
                                     completed: false
                                 }));
                             
@@ -228,7 +344,6 @@
                     description: '',
                     workCompletedThisPeriod: '',
                     valueRequested: '',
-                    needsVerification: true,
                     completed: false
                 };
                 setItems([...items, newItem]);
@@ -247,7 +362,6 @@
                             description: parts[0] || '',
                             workCompletedThisPeriod: parts[1] || '',
                             valueRequested: parts[2] || '',
-                            needsVerification: true,
                             completed: false
                         });
                     }
@@ -301,102 +415,242 @@
                 }));
             };
 
-            const generateReport = () => {
-                const reportContent = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <style>
-                            body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
-                            h1 { color: #2563eb; border-bottom: 3px solid #2563eb; padding-bottom: 10px; }
-                            .project-info { background: #f3f4f6; padding: 15px; margin: 20px 0; border-radius: 8px; }
-                            .item { margin: 30px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; page-break-inside: avoid; }
-                            .item-header { background: #eff6ff; padding: 10px; margin: -20px -20px 15px -20px; border-radius: 8px 8px 0 0; }
-                            .completed { background: #d1fae5; }
-                            .item-details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 10px 0; }
-                            .detail-item { padding: 8px; background: #f9fafb; border-radius: 4px; }
-                            .detail-label { font-weight: bold; font-size: 12px; color: #6b7280; text-transform: uppercase; }
-                            .detail-value { font-size: 16px; color: #1f2937; margin-top: 2px; }
-                            .photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0; }
-                            .photos img { width: 100%; border-radius: 4px; border: 1px solid #e5e7eb; }
-                            .photo-caption { font-size: 12px; color: #6b7280; margin-top: 5px; }
-                            .notes { background: #fef3c7; padding: 10px; border-radius: 4px; margin: 10px 0; white-space: pre-wrap; }
-                            @media print { .item { page-break-inside: avoid; } }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>Field Verification Report</h1>
-                        <div class="project-info">
-                            <p><strong>Project Name:</strong> ${project.name || 'N/A'}</p>
-                            <p><strong>Pay Application Date:</strong> ${project.payAppDate}</p>
-                            <p><strong>Pay App Period:</strong> ${project.periodStart || 'N/A'} to ${project.periodEnd || 'N/A'}</p>
-                            <p><strong>Observation Date:</strong> ${project.observationDate}</p>
-                            <p><strong>Report Generated:</strong> ${new Date().toLocaleString()}</p>
-                        </div>
-                        
-                        <p><em>This report includes only items subject to field verification.</em></p>
-                        
-                        ${items.map(item => `
-                            <div class="item">
-                                <div class="item-header ${item.completed ? 'completed' : ''}">
-                                    <h3>${item.description || 'Untitled Item'}</h3>
-                                    <p><strong>Status:</strong> ${item.completed ? '✓ Verified & Completed' : '○ Pending Verification'}</p>
-                                </div>
-                                
-                                <div class="item-details">
-                                    <div class="detail-item">
-                                        <div class="detail-label">Work Completed This Period</div>
-                                        <div class="detail-value">$${item.workCompletedThisPeriod || '0.00'}</div>
-                                    </div>
-                                    <div class="detail-item">
-                                        <div class="detail-label">Value Requested</div>
-                                        <div class="detail-value">$${item.valueRequested || '0.00'}</div>
-                                    </div>
-                                    <div class="detail-item">
-                                        <div class="detail-label">Photos Captured</div>
-                                        <div class="detail-value">${photos[item.id] ? photos[item.id].length : 0}</div>
-                                    </div>
-                                </div>
-                                
-                                ${notes[item.id] ? `
-                                    <div class="notes">
-                                        <strong>Observation Notes:</strong><br/>
-                                        ${notes[item.id]}
-                                    </div>
-                                ` : ''}
-                                
-                                ${photos[item.id] && photos[item.id].length > 0 ? `
-                                    <div class="photos">
-                                        ${photos[item.id].map(photo => `
-                                            <div>
-                                                <img src="${photo.url}" alt="Verification photo"/>
-                                                <div class="photo-caption">${photo.date}</div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                ` : '<p><em>No verification photos captured</em></p>'}
-                            </div>
-                        `).join('')}
-                    </body>
-                    </html>
-                `;
+            const generatePDFReport = () => {
+                const verifiedItems = items.filter(i => i.completed === true);
+                
+                if (verifiedItems.length === 0) {
+                    alert('No items have been verified yet. Please check the "Work Verified & Complete" box for items you want to include in the report.');
+                    return;
+                }
+                
+                if (!window.jspdf || !window.jspdf.jsPDF) {
+                    alert('PDF library is still loading. Please wait a moment and try again.');
+                    return;
+                }
+                
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 20;
+                let yPos = margin;
 
-                const blob = new Blob([reportContent], { type: 'text/html' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Field_Verification_${project.name.replace(/\s+/g, '_')}_${project.payAppDate}.html`;
-                a.click();
-                URL.revokeObjectURL(url);
+                const checkPageBreak = (neededSpace) => {
+                    if (yPos + neededSpace > pageHeight - margin) {
+                        doc.addPage();
+                        yPos = margin;
+                        return true;
+                    }
+                    return false;
+                };
+
+                const formatCurrency = (val) => {
+                    const num = parseFloat((val || '').toString().replace(/[$,]/g, ''));
+                    return isNaN(num) ? '$0.00' : `$${num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                };
+
+                // Header
+                doc.setFontSize(20);
+                doc.setTextColor(0, 0, 0);
+                doc.setFont(undefined, 'bold');
+                doc.text('FIELD VERIFICATION REPORT', margin, yPos);
+                doc.setFont(undefined, 'normal');
+                yPos += 10;
+                
+                doc.setFontSize(9);
+                doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
+                yPos += 10;
+                
+                doc.setDrawColor(200, 200, 200);
+                doc.line(margin, yPos, pageWidth - margin, yPos);
+                yPos += 8;
+
+                // Project Info
+                doc.setFontSize(10);
+                doc.text(`Project: ${project.name || 'Not specified'}`, margin, yPos);
+                yPos += 7;
+                doc.text(`Pay Application Date: ${project.payAppDate}`, margin, yPos);
+                yPos += 7;
+                doc.text(`Period: ${project.periodStart || 'N/A'} to ${project.periodEnd || 'N/A'}`, margin, yPos);
+                yPos += 7;
+                doc.text(`Observation Date: ${project.observationDate}`, margin, yPos);
+                yPos += 10;
+                
+                doc.line(margin, yPos, pageWidth - margin, yPos);
+                yPos += 8;
+
+                // Summary
+                checkPageBreak(30);
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'bold');
+                doc.text('VERIFICATION SUMMARY', margin, yPos);
+                doc.setFont(undefined, 'normal');
+                yPos += 7;
+                
+                doc.setFontSize(9);
+                doc.text(`Items Verified: ${verifiedItems.length} | Total Items: ${items.length}`, margin, yPos);
+                yPos += 10;
+                
+                doc.line(margin, yPos, pageWidth - margin, yPos);
+                yPos += 8;
+
+                // Verified Items
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('VERIFIED ITEMS', margin, yPos);
+                doc.setFont(undefined, 'normal');
+                yPos += 8;
+
+                verifiedItems.forEach((item, idx) => {
+                    let itemHeight = 40;
+                    if (notes[item.id]) itemHeight += 10;
+                    if (photos[item.id] && photos[item.id].length > 0) {
+                        itemHeight += Math.ceil(photos[item.id].length / 2) * 60;
+                    }
+                    
+                    checkPageBreak(itemHeight);
+                    
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`${idx + 1}. ${item.description || 'Untitled Item'}`.substring(0, 80), margin, yPos);
+                    doc.setFont(undefined, 'normal');
+                    yPos += 6;
+                    
+                    doc.setFontSize(9);
+                    doc.text(`Work This Period: `, margin, yPos);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`${formatCurrency(item.workCompletedThisPeriod)}`, margin + 35, yPos);
+                    doc.setFont(undefined, 'normal');
+                    yPos += 5;
+                    
+                    doc.setFontSize(8);
+                    doc.text(`Value Requested: ${formatCurrency(item.valueRequested)}`, margin, yPos);
+                    yPos += 5;
+                    
+                    doc.setTextColor(0, 128, 0);
+                    doc.text('✓ Field Verified', margin, yPos);
+                    doc.setTextColor(0, 0, 0);
+                    yPos += 8;
+                    
+                    if (notes[item.id]) {
+                        doc.setFontSize(8);
+                        doc.setFont(undefined, 'bold');
+                        doc.text('Notes:', margin, yPos);
+                        doc.setFont(undefined, 'normal');
+                        yPos += 5;
+                        const noteLines = doc.splitTextToSize(notes[item.id], pageWidth - 2 * margin);
+                        doc.text(noteLines, margin, yPos);
+                        yPos += noteLines.length * 5;
+                    }
+                    
+                    if (photos[item.id] && photos[item.id].length > 0) {
+                        yPos += 3;
+                        const photoWidth = 70;
+                        const photoHeight = 52;
+                        let xOffset = margin;
+                        let photoCount = 0;
+                        
+                        photos[item.id].forEach((photo, pIdx) => {
+                            if (photoCount === 2) {
+                                yPos += photoHeight + 5;
+                                xOffset = margin;
+                                photoCount = 0;
+                                checkPageBreak(photoHeight + 10);
+                            }
+                            
+                            try {
+                                doc.addImage(photo.url, 'JPEG', xOffset, yPos, photoWidth, photoHeight);
+                            } catch (e) {
+                                console.error('Error adding photo to PDF:', e);
+                            }
+                            
+                            xOffset += photoWidth + 10;
+                            photoCount++;
+                        });
+                        
+                        if (photoCount > 0) {
+                            yPos += photoHeight + 5;
+                        }
+                    }
+                    
+                    yPos += 3;
+                    doc.setDrawColor(220, 220, 220);
+                    doc.line(margin, yPos, pageWidth - margin, yPos);
+                    yPos += 8;
+                });
+
+                // Architect's Certification
+                checkPageBreak(80);
+                
+                doc.setDrawColor(200, 200, 200);
+                doc.line(margin, yPos, pageWidth - margin, yPos);
+                yPos += 8;
+                
+                doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
+                doc.setFont(undefined, 'bold');
+                doc.text("ARCHITECT'S CERTIFICATION", margin, yPos);
+                doc.setFont(undefined, 'normal');
+                
+                doc.setFontSize(8);
+                yPos += 7;
+                
+                const certText = [
+                    'SCOPE OF OBSERVATION:',
+                    `This report documents observations conducted on ${project.observationDate}. The architect's observations are limited to readily visible conditions.`,
+                    '',
+                    'VERIFIED WORK: I have visited the site and observed the construction work identified as verified items.',
+                    '',
+                    'LIMITATIONS: This observation does not constitute a warranty. The architect has not verified quantities through detailed testing.'
+                ];
+                
+                certText.forEach(line => {
+                    if (line === '') {
+                        yPos += 3;
+                    } else {
+                        const lines = doc.splitTextToSize(line, pageWidth - 2 * margin);
+                        doc.text(lines, margin, yPos);
+                        yPos += lines.length * 4;
+                    }
+                });
+                
+                yPos += 10;
+                doc.text('_____________________________________', margin, yPos);
+                yPos += 5;
+                doc.text("Architect's Signature", margin, yPos);
+                yPos += 7;
+                doc.text(`Date: ${new Date().toLocaleDateString()}`, margin, yPos);
+
+                // Page numbers
+                const totalPages = doc.internal.pages.length - 1;
+                for (let i = 1; i <= totalPages; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(8);
+                    doc.setTextColor(128, 128, 128);
+                    doc.text(
+                        `Page ${i} of ${totalPages}`,
+                        pageWidth / 2,
+                        pageHeight - 10,
+                        { align: 'center' }
+                    );
+                }
+
+                const fileName = `Verification_${project.name.replace(/\s+/g, '_')}_${project.payAppDate}.pdf`;
+                doc.save(fileName);
             };
 
             return (
                 <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
                     <div className="max-w-4xl mx-auto">
                         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                            <div className="flex items-center gap-3 mb-6">
-                                <FileText className="w-8 h-8 text-blue-600" />
-                                <h1 className="text-3xl font-bold text-gray-800">Field Verification</h1>
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-3">
+                                    <FileText className="w-8 h-8 text-blue-600" />
+                                    <h1 className="text-3xl font-bold text-gray-800">Field Verification</h1>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                    Auto-saved {savedData?.lastSaved ? new Date(savedData.lastSaved).toLocaleTimeString() : 'never'}
+                                </div>
                             </div>
 
                             <div className="space-y-4 mb-6">
@@ -492,12 +746,45 @@
                                     </button>
                                     
                                     <button
-                                        onClick={generateReport}
+                                        onClick={generatePDFReport}
                                         disabled={items.length === 0}
                                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                                     >
                                         <Download className="w-5 h-5" />
-                                        Generate Report
+                                        Generate PDF Report
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-wrap gap-3 mt-3">
+                                    <button
+                                        onClick={exportProject}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                                    >
+                                        <Save className="w-4 h-4" />
+                                        Export Project
+                                    </button>
+                                    
+                                    <input
+                                        ref={importInputRef}
+                                        type="file"
+                                        accept="application/json"
+                                        onChange={importProject}
+                                        className="hidden"
+                                    />
+                                    <button
+                                        onClick={() => importInputRef.current?.click()}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                                    >
+                                        <Upload className="w-4 h-4" />
+                                        Import Project
+                                    </button>
+                                    
+                                    <button
+                                        onClick={clearAllData}
+                                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Clear All Data
                                     </button>
                                 </div>
 
