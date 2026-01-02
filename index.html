@@ -161,15 +161,33 @@
                 const dataStr = JSON.stringify(exportData, null, 2);
                 const blob = new Blob([dataStr], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
                 const fileName = `${project.name.replace(/\s+/g, '_') || 'Verification_Project'}_${new Date().toISOString().split('T')[0]}.json`;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                alert('Project exported! Save this file to continue later.');
+                
+                // Check if we're on iOS/mobile
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isIOS || isMobile) {
+                    // For iOS/mobile: Create a data URI and open in new window
+                    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                    const newWindow = window.open(dataUri, '_blank');
+                    
+                    if (newWindow) {
+                        alert('Project file opened in new tab. Use your browser\'s Share button to save the file or send it via email/messages.');
+                    } else {
+                        alert('Please allow pop-ups for this site to export your project.');
+                    }
+                } else {
+                    // For desktop: Direct download
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    alert('Project exported! Save this file to continue later.');
+                }
             };
 
             // Import project from JSON file
@@ -635,8 +653,27 @@
                     );
                 }
 
+                // Save PDF - iOS compatible method
                 const fileName = `Verification_${project.name.replace(/\s+/g, '_')}_${project.payAppDate}.pdf`;
-                doc.save(fileName);
+                
+                // Check if we're on iOS/mobile
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isIOS || isMobile) {
+                    // For iOS/mobile: Open PDF in new tab so user can download/share
+                    const pdfBlob = doc.output('blob');
+                    const pdfUrl = URL.createObjectURL(pdfBlob);
+                    window.open(pdfUrl, '_blank');
+                    
+                    // Show instructions
+                    setTimeout(() => {
+                        alert('PDF opened in new tab. Tap the Share button to save or send.');
+                    }, 500);
+                } else {
+                    // For desktop: Direct download
+                    doc.save(fileName);
+                }
             };
 
             return (
