@@ -433,7 +433,7 @@
                 }));
             };
 
-            const generatePDFReport = () => {
+            const generatePDFReport = async () => {
                 const verifiedItems = items.filter(i => i.completed === true);
                 
                 if (verifiedItems.length === 0) {
@@ -519,7 +519,9 @@
                 doc.setFont(undefined, 'normal');
                 yPos += 8;
 
-                verifiedItems.forEach((item, idx) => {
+                for (let idx = 0; idx < verifiedItems.length; idx++) {
+                    const item = verifiedItems[idx];
+                    
                     let itemHeight = 40;
                     if (notes[item.id]) itemHeight += 10;
                     if (photos[item.id] && photos[item.id].length > 0) {
@@ -568,7 +570,32 @@
                         let xOffset = margin;
                         let photoCount = 0;
                         
-                        photos[item.id].forEach((photo, pIdx) => {
+                        // Helper function to fix photo orientation
+                        const fixPhotoOrientation = (base64Image) => {
+                            return new Promise((resolve) => {
+                                const img = new Image();
+                                img.onload = function() {
+                                    const canvas = document.createElement('canvas');
+                                    const ctx = canvas.getContext('2d');
+                                    
+                                    // Set canvas size to match image
+                                    canvas.width = img.width;
+                                    canvas.height = img.height;
+                                    
+                                    // Draw the image (this respects EXIF orientation in browser)
+                                    ctx.drawImage(img, 0, 0);
+                                    
+                                    // Convert back to base64
+                                    resolve(canvas.toDataURL('image/jpeg', 0.9));
+                                };
+                                img.src = base64Image;
+                            });
+                        };
+                        
+                        // Process photos sequentially with proper orientation
+                        for (let i = 0; i < photos[item.id].length; i++) {
+                            const photo = photos[item.id][i];
+                            
                             if (photoCount === 2) {
                                 yPos += photoHeight + 5;
                                 xOffset = margin;
@@ -577,14 +604,16 @@
                             }
                             
                             try {
-                                doc.addImage(photo.url, 'JPEG', xOffset, yPos, photoWidth, photoHeight);
+                                // Fix orientation before adding to PDF
+                                const correctedImage = await fixPhotoOrientation(photo.url);
+                                doc.addImage(correctedImage, 'JPEG', xOffset, yPos, photoWidth, photoHeight);
                             } catch (e) {
                                 console.error('Error adding photo to PDF:', e);
                             }
                             
                             xOffset += photoWidth + 10;
                             photoCount++;
-                        });
+                        }
                         
                         if (photoCount > 0) {
                             yPos += photoHeight + 5;
@@ -595,7 +624,7 @@
                     doc.setDrawColor(220, 220, 220);
                     doc.line(margin, yPos, pageWidth - margin, yPos);
                     yPos += 8;
-                });
+                }
 
                 // Architect's Certification
                 checkPageBreak(80);
